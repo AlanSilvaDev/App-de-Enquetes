@@ -4,15 +4,13 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
@@ -23,31 +21,21 @@ import com.example.a3_teste_paineldevotao.data.EnqueteRepository;
 import com.example.a3_teste_paineldevotao.data.FirebaseManager;
 import com.example.a3_teste_paineldevotao.model.Enquete;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.firebase.Timestamp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
 
-/**
- * Tela principal do aplicativo (Painel de Votação).
- *
- * Responsabilidades:
- * - Exibir a pergunta da enquete e as opções de voto.
- * - Mostrar o total de votos por opção e o total geral.
- * - Permitir ao usuário votar (uma única vez).
- * - Exibir qual foi o voto do usuário.
- * - Permitir reset da enquete (com código de professor).
- * - Permitir acesso à tela de configuração da enquete (menu).
- *
- * Toda a lógica de Firestore está encapsulada em EnqueteRepository e FirebaseManager.
- * Aqui focamos na parte de UI e fluxo de tela.
- */
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "PainelVotacao";
 
-    // =====================================================================
-    //  Componentes de interface
-    // =====================================================================
-
+    // ==========================================================
+    // UI ORIGINAL
+    // ==========================================================
     private TextView txtSubtitulo;
     private TextView txtPergunta;
 
@@ -63,18 +51,26 @@ public class MainActivity extends AppCompatActivity {
     private Button btnVotarC;
     private Button btnReset;
 
-    // =====================================================================
-    //  Firebase / Repositório
-    // =====================================================================
+    // ==========================================================
+    // ATIVIDADE 1 (metadados do voto)
+    // ==========================================================
+    private TextView txtDataVoto;
+    private TextView txtUidUsuario;
+    private TextView txtDeviceInfo;
 
+    // ==========================================================
+    // ATIVIDADE 5 (rodapé + data limite)
+    // ==========================================================
+    private TextView txtRodape;
+    private String dataEncerramentoString;
+
+    // ==========================================================
+    // Firebase / Repositório
+    // ==========================================================
     private FirebaseManager firebaseManager;
     private FirebaseAuth auth;
     private EnqueteRepository enqueteRepository;
-    private ListenerRegistration resultadosListener;
-
-    // =====================================================================
-    //  Ciclo de vida
-    // =====================================================================
+    private ListenerRegistration listenerResultados;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,16 +91,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
 
-        // Reforço: carrega estado atual da enquete ao voltar para a tela
-        enqueteRepository.carregarEnquete(new EnqueteRepository.EnqueteCarregadaCallback() {
+        // Listener da enquete (método OFICIAL existente no repositório)
+        listenerResultados = enqueteRepository.observarEnquete(new EnqueteRepository.EnqueteListener() {
             @Override
-            public void onEnqueteCarregada(Enquete enquete) {
+            public void onEnqueteAtualizada(Enquete enquete) {
                 atualizarUIComEnquete(enquete);
             }
 
             @Override
             public void onErro(Exception e) {
-                Log.e(TAG, "Erro ao carregar enquete (onResume): ", e);
+                Log.e(TAG, "Erro ao observar enquete", e);
             }
         });
 
@@ -114,89 +110,38 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Remove listener em tempo real para evitar leaks
-        if (resultadosListener != null) {
-            resultadosListener.remove();
-            resultadosListener = null;
+        if (listenerResultados != null) {
+            listenerResultados.remove();
         }
     }
 
-    // =====================================================================
-    //  Toolbar e Insets (UI)
-    // =====================================================================
-
-    /**
-     * Configura a Toolbar como ActionBar da tela principal.
-     */
+    // ==========================================================
+    // Inicialização
+    // ==========================================================
     private void configurarToolbar() {
         MaterialToolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayShowTitleEnabled(true);
             getSupportActionBar().setTitle("Painel de Votação");
         }
-
-        // Em algumas versões, setTitleCentered pode não existir; protegemos com try/catch
-        try {
-            toolbar.setTitleCentered(false);
-        } catch (Exception ignored) {
-        }
     }
 
-    /**
-     * Ajusta os paddings para considerar as barras de sistema
-     * (status bar, nav bar) com EdgeToEdge.
-     */
     private void aplicarInsets() {
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layoutMain),
-                (v, insets) -> {
-                    Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-                    v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-                    return insets;
-                });
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layoutMain), (v, insets) -> {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return insets;
+        });
     }
 
-    // =====================================================================
-    //  Menu (acesso à tela de configuração)
-    // =====================================================================
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    /**
-     * Menu superior da tela principal.
-     * Aqui só temos a opção de ir para "Configurar enquete".
-     */
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.menu_configurar_enquete) {
-            Intent intent = new Intent(MainActivity.this, ConfigurarEnqueteActivity.class);
-            startActivity(intent);
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    // =====================================================================
-    //  Inicialização (Firebase, Views, Login)
-    // =====================================================================
-
-    /**
-     * Inicializa FirebaseManager, FirebaseAuth e EnqueteRepository.
-     */
     private void inicializarFirebase() {
         firebaseManager = FirebaseManager.getInstance(this);
         auth = firebaseManager.getAuth();
         enqueteRepository = new EnqueteRepository(this);
+        enqueteRepository.inicializarSeNecessario();
     }
 
-    /**
-     * Faz o findViewById de todos os componentes da interface.
-     */
     private void inicializarViews() {
         txtSubtitulo = findViewById(R.id.txtSubtitulo);
         txtPergunta = findViewById(R.id.txtPergunta);
@@ -212,138 +157,129 @@ public class MainActivity extends AppCompatActivity {
         btnVotarB = findViewById(R.id.btnVotarB);
         btnVotarC = findViewById(R.id.btnVotarC);
         btnReset = findViewById(R.id.btnReset);
+
+        txtDataVoto = findViewById(R.id.txtDataVoto);
+        txtUidUsuario = findViewById(R.id.txtUidUsuario);
+        txtDeviceInfo = findViewById(R.id.txtDeviceInfo);
+        txtRodape = findViewById(R.id.txtRodape);
     }
 
-    /**
-     * Faz login anônimo no Firebase Auth.
-     * Isso permite identificar o usuário unicamente (UID) sem exigir cadastro.
-     */
     private void fazerLoginAnonimo() {
-        // Se já está logado, não precisa fazer login novamente
         if (auth.getCurrentUser() != null) {
-            configurarPosLogin();
             return;
         }
 
-        auth.signInAnonymously()
-                .addOnCompleteListener(this, task -> {
-                    if (task.isSuccessful()) {
-                        Toast.makeText(
-                                MainActivity.this,
-                                "Conectado (anônimo).",
-                                Toast.LENGTH_SHORT
-                        ).show();
-                        configurarPosLogin();
-                    } else {
-                        Toast.makeText(
-                                MainActivity.this,
-                                "Erro ao conectar.",
-                                Toast.LENGTH_LONG
-                        ).show();
-                    }
-                });
+        auth.signInAnonymously().addOnSuccessListener(e -> {
+            Toast.makeText(this, "Conectado anonimamente", Toast.LENGTH_SHORT).show();
+        });
     }
 
-    /**
-     * Configura o estado da tela após garantir que o usuário está logado:
-     * - Garante documento inicial da enquete.
-     * - Inicia listener em tempo real para os resultados.
-     * - Carrega o voto atual do usuário.
-     */
-    private void configurarPosLogin() {
-        // Garante que o documento da enquete exista
-        enqueteRepository.inicializarSeNecessario();
+    // ==========================================================
+    // Atualizar tela com dados da enquete
+    // ==========================================================
+    private void atualizarUIComEnquete(Enquete e) {
 
-        // Começa a ouvir as mudanças em tempo real da enquete
-        configurarListenerResultados();
+        txtPergunta.setText(e.getTituloEnquete());
+        btnVotarA.setText(e.getTextoOpcaoA());
+        btnVotarB.setText(e.getTextoOpcaoB());
+        btnVotarC.setText(e.getTextoOpcaoC());
 
-        // Atualiza a informação "Seu voto" na tela
-        carregarVotoUsuario();
+        long A = e.getOpcaoA();
+        long B = e.getOpcaoB();
+        long C = e.getOpcaoC();
+        long total = A + B + C;
+
+        txtTotalA.setText("Opção A: " + A + " (" + (total > 0 ? A * 100 / total : 0) + "%)");
+        txtTotalB.setText("Opção B: " + B + " (" + (total > 0 ? B * 100 / total : 0) + "%)");
+        txtTotalC.setText("Opção C: " + C + " (" + (total > 0 ? C * 100 / total : 0) + "%)");
+        txtTotalGeral.setText("Total de votos: " + total);
+
+        // Rodapé (Atividade 5)
+        txtRodape.setVisibility(
+                e.getMensagemRodape() != null ? View.VISIBLE : View.GONE
+        );
+        txtRodape.setText(e.getMensagemRodape());
+
+        dataEncerramentoString = e.getDataHoraEncerramento();
     }
 
-    /**
-     * Configura um listener em tempo real para acompanhar mudanças
-     * nos resultados da enquete.
-     */
-    private void configurarListenerResultados() {
-        resultadosListener = enqueteRepository.observarEnquete(new EnqueteRepository.EnqueteListener() {
+    // ==========================================================
+    // ATIVIDADE 1 — Carregar detalhes do voto
+    // ==========================================================
+    private void carregarVotoUsuario() {
+
+        enqueteRepository.carregarDetalhesVotoUsuario(dados -> {
+
+            if (dados != null) {
+
+                String opcao = (String) dados.get("opcaoEscolhida");
+                txtSeuVoto.setText("Seu voto: opção " + opcao);
+
+                Timestamp ts = (Timestamp) dados.get("timestamp");
+                if (ts != null) {
+                    String data = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                            .format(ts.toDate());
+                    txtDataVoto.setText("Data do voto: " + data);
+                }
+
+                txtUidUsuario.setText("UID: " + dados.get("uid"));
+                txtDeviceInfo.setText("Dispositivo: " +
+                        dados.get("deviceModel") + " (Android " +
+                        dados.get("androidVersion") + ")");
+
+            } else {
+
+                txtSeuVoto.setText("Seu voto: ainda não votou");
+                txtDataVoto.setText("Data do voto: —");
+                txtUidUsuario.setText("UID: " + auth.getUid());
+                txtDeviceInfo.setText("Dispositivo: —");
+            }
+        });
+    }
+
+    // ==========================================================
+    // Registrar voto (com limite de horário)
+    // ==========================================================
+    private void registrarVoto(String opcao) {
+
+        if (dataEncerramentoString != null && !dataEncerramentoString.isEmpty()) {
+            try {
+                Date limite = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+                        .parse(dataEncerramentoString);
+
+                if (new Date().after(limite)) {
+                    Toast.makeText(this, "Votação encerrada", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "Erro na data limite: " + e.getMessage());
+            }
+        }
+
+        enqueteRepository.registrarVoto(opcao, new EnqueteRepository.RegistrarVotoCallback() {
             @Override
-            public void onEnqueteAtualizada(Enquete enquete) {
-                atualizarUIComEnquete(enquete);
+            public void onVotoRegistrado(String opcao) {
+                carregarVotoUsuario();
+                Toast.makeText(MainActivity.this, "Voto registrado", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onJaVotou(String opcaoExistente) {
+                txtSeuVoto.setText("Seu voto: opção " + opcaoExistente);
+                Toast.makeText(MainActivity.this, "Você já votou", Toast.LENGTH_SHORT).show();
             }
 
             @Override
             public void onErro(Exception e) {
-                if (e != null) {
-                    Log.e(TAG, "Erro no listener da enquete: ", e);
-                }
+                Toast.makeText(MainActivity.this, "Erro ao votar", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
-    // =====================================================================
-    //  Atualização da UI com os dados da enquete
-    // =====================================================================
-
-    /**
-     * Atualiza a interface com os dados da enquete:
-     * - Pergunta
-     * - Texto dos botões de voto
-     * - Contadores de votos e porcentagens
-     */
-    private void atualizarUIComEnquete(Enquete enquete) {
-        if (enquete == null) return;
-
-        // Textos dinâmicos
-        if (enquete.getTituloEnquete() != null) {
-            txtPergunta.setText(enquete.getTituloEnquete());
-        }
-        if (enquete.getTextoOpcaoA() != null) {
-            btnVotarA.setText(enquete.getTextoOpcaoA());
-        }
-        if (enquete.getTextoOpcaoB() != null) {
-            btnVotarB.setText(enquete.getTextoOpcaoB());
-        }
-        if (enquete.getTextoOpcaoC() != null) {
-            btnVotarC.setText(enquete.getTextoOpcaoC());
-        }
-
-        long votosA = enquete.getOpcaoA();
-        long votosB = enquete.getOpcaoB();
-        long votosC = enquete.getOpcaoC();
-        long total = votosA + votosB + votosC;
-
-        long percA = (total > 0) ? (votosA * 100 / total) : 0;
-        long percB = (total > 0) ? (votosB * 100 / total) : 0;
-        long percC = (total > 0) ? (votosC * 100 / total) : 0;
-
-        txtTotalA.setText("Opção A: " + votosA + " votos (" + percA + "%)");
-        txtTotalB.setText("Opção B: " + votosB + " votos (" + percB + "%)");
-        txtTotalC.setText("Opção C: " + votosC + " votos (" + percC + "%)");
-        txtTotalGeral.setText("Total de votos: " + total);
-    }
-
-    /**
-     * Carrega do Firestore qual opção o usuário já votou (se houver)
-     * e atualiza o texto "Seu voto".
-     */
-    private void carregarVotoUsuario() {
-        enqueteRepository.carregarVotoUsuario(opcao -> {
-            if (opcao != null) {
-                txtSeuVoto.setText("Seu voto: opção " + opcao);
-            } else {
-                txtSeuVoto.setText("Seu voto: ainda não votou");
-            }
-        });
-    }
-
-    // =====================================================================
-    //  Ações da interface (votar e resetar enquete)
-    // =====================================================================
-
-    /**
-     * Configura os listeners dos botões da tela.
-     */
+    // ==========================================================
+    // Botões
+    // ==========================================================
     private void configurarBotoes() {
         btnVotarA.setOnClickListener(v -> registrarVoto("A"));
         btnVotarB.setOnClickListener(v -> registrarVoto("B"));
@@ -351,47 +287,11 @@ public class MainActivity extends AppCompatActivity {
         btnReset.setOnClickListener(v -> mostrarDialogoReset());
     }
 
-    /**
-     * Envia a opção selecionada para o EnqueteRepository registrar o voto.
-     */
-    private void registrarVoto(String opcao) {
-        enqueteRepository.registrarVoto(opcao, new EnqueteRepository.RegistrarVotoCallback() {
-            @Override
-            public void onVotoRegistrado(String opcaoRegistrada) {
-                txtSeuVoto.setText("Seu voto: opção " + opcaoRegistrada);
-                Toast.makeText(
-                        MainActivity.this,
-                        "Voto registrado.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
-
-            @Override
-            public void onJaVotou(String opcaoExistente) {
-                txtSeuVoto.setText("Seu voto: opção " + opcaoExistente);
-                Toast.makeText(
-                        MainActivity.this,
-                        "Você já votou.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
-
-            @Override
-            public void onErro(Exception e) {
-                Log.e(TAG, "Erro ao registrar voto: ", e);
-                Toast.makeText(
-                        MainActivity.this,
-                        "Erro ao registrar voto.",
-                        Toast.LENGTH_SHORT
-                ).show();
-            }
-        });
-    }
-
-    /**
-     * Exibe um diálogo pedindo o "código do professor" para autorizar o reset.
-     */
+    // ==========================================================
+    // ATIVIDADE 3 — Diálogo com acesso à lista de votantes
+    // ==========================================================
     private void mostrarDialogoReset() {
+
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Zerar votos");
         builder.setMessage("Digite o código do professor:");
@@ -400,41 +300,37 @@ public class MainActivity extends AppCompatActivity {
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         builder.setView(input);
 
-        builder.setPositiveButton("Confirmar", (dialog, which) -> {
+        builder.setPositiveButton("Confirmar", (d, w) -> {
             if ("1234".equals(input.getText().toString().trim())) {
                 resetarEnquete();
             } else {
-                Toast.makeText(this, "Código incorreto.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Código incorreto", Toast.LENGTH_SHORT).show();
             }
         });
 
-        builder.setNegativeButton("Cancelar", (dialog, which) -> dialog.dismiss());
+        builder.setNeutralButton("Ver Lista", (d, w) -> {
+            if ("1234".equals(input.getText().toString().trim())) {
+                startActivity(new Intent(MainActivity.this, ListaVotantesActivity.class));
+            } else {
+                Toast.makeText(this, "Código incorreto", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        builder.setNegativeButton("Cancelar", (d, w) -> d.dismiss());
         builder.show();
     }
 
-    /**
-     * Chama o repositório para zerar contadores e votos no Firestore.
-     */
     private void resetarEnquete() {
         enqueteRepository.resetarEnquete(new EnqueteRepository.OperacaoCallback() {
             @Override
             public void onSucesso() {
                 txtSeuVoto.setText("Seu voto: ainda não votou");
-                Toast.makeText(
-                        MainActivity.this,
-                        "Enquete zerada.",
-                        Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(MainActivity.this, "Enquete zerada", Toast.LENGTH_SHORT).show();
             }
 
             @Override
             public void onErro(Exception e) {
-                Log.e(TAG, "Erro ao resetar enquete: ", e);
-                Toast.makeText(
-                        MainActivity.this,
-                        "Erro ao zerar enquete.",
-                        Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(MainActivity.this, "Erro ao zerar", Toast.LENGTH_SHORT).show();
             }
         });
     }

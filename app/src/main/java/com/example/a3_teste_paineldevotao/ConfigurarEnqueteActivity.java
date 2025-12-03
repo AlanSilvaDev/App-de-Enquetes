@@ -15,35 +15,29 @@ import androidx.core.view.WindowInsetsCompat;
 import com.example.a3_teste_paineldevotao.data.EnqueteRepository;
 import com.google.android.material.appbar.MaterialToolbar;
 
-/**
- * Tela de configuração da enquete.
- * <p>
- * Responsabilidades principais:
- * - Exibir os campos de edição (título e textos das opções A, B, C).
- * - Carregar a configuração atual da enquete a partir do Firestore.
- * - Validar os campos digitados pelo usuário.
- * - Salvar as novas configurações usando o EnqueteRepository.
- * <p>
- * Toda a parte de acesso ao Firestore fica concentrada no EnqueteRepository,
- * mantendo esta Activity focada apenas em lógica de tela (UI).
- */
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 public class ConfigurarEnqueteActivity extends AppCompatActivity {
 
     private static final String TAG = "ConfigEnquete";
 
-    // Campos de entrada
+    // Campos originais
     private EditText edtTituloEnquete;
     private EditText edtOpcaoA;
     private EditText edtOpcaoB;
     private EditText edtOpcaoC;
     private Button btnSalvarConfig;
 
-    // Repositório centraliza toda a lógica de Firestore
-    private EnqueteRepository enqueteRepository;
+    // ================================================================
+    // ATIVIDADE 5 — NOVOS CAMPOS ADICIONADOS
+    // ================================================================
+    private EditText edtMensagemRodape;
+    private EditText edtDataEncerramento;
 
-    // =====================================================================
-    //  Ciclo de vida
-    // =====================================================================
+    // Repositório
+    private EnqueteRepository enqueteRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,14 +48,11 @@ public class ConfigurarEnqueteActivity extends AppCompatActivity {
         configurarToolbar();
         aplicarInsets();
         inicializarRepository();
-        inicializarViews();
+        inicializarViews();          // Atualizado para incluir campos novos
         carregarConfiguracoesAtuais();
         configurarBotaoSalvar();
     }
 
-    /**
-     * Configura o comportamento do botão "voltar" da Toolbar.
-     */
     @Override
     public boolean onSupportNavigateUp() {
         onBackPressed();
@@ -69,12 +60,9 @@ public class ConfigurarEnqueteActivity extends AppCompatActivity {
     }
 
     // =====================================================================
-    //  Configuração de UI (Toolbar e Insets)
+    // Toolbar
     // =====================================================================
 
-    /**
-     * Configura a Toolbar como ActionBar da tela.
-     */
     private void configurarToolbar() {
         MaterialToolbar toolbar = findViewById(R.id.toolbarConfig);
         setSupportActionBar(toolbar);
@@ -84,18 +72,13 @@ public class ConfigurarEnqueteActivity extends AppCompatActivity {
             getSupportActionBar().setTitle("Configurar enquete");
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
-
-        // Em algumas versões, setTitleCentered pode não existir; protegemos com try/catch
-        try {
-            toolbar.setTitleCentered(false);
-        } catch (Exception ignored) {
-        }
+        try { toolbar.setTitleCentered(false); } catch (Exception ignored) {}
     }
 
-    /**
-     * Ajusta os paddings para considerar as barras de sistema (status bar, nav bar)
-     * utilizando o modo EdgeToEdge.
-     */
+    // =====================================================================
+    // Layout e Repository
+    // =====================================================================
+
     private void aplicarInsets() {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layoutConfigRoot),
                 (v, insets) -> {
@@ -105,132 +88,147 @@ public class ConfigurarEnqueteActivity extends AppCompatActivity {
                 });
     }
 
-    // =====================================================================
-    //  Inicializações principais
-    // =====================================================================
-
-    /**
-     * Instancia o repositório responsável por lidar com a enquete no Firestore.
-     */
     private void inicializarRepository() {
         enqueteRepository = new EnqueteRepository(this);
     }
 
-    /**
-     * Faz o findViewById de todos os componentes da tela.
-     */
+    // =====================================================================
+    // Inicialização visual — AGORA COM OS CAMPOS NOVOS
+    // =====================================================================
+
     private void inicializarViews() {
         edtTituloEnquete = findViewById(R.id.edtTituloEnquete);
         edtOpcaoA = findViewById(R.id.edtOpcaoA);
         edtOpcaoB = findViewById(R.id.edtOpcaoB);
         edtOpcaoC = findViewById(R.id.edtOpcaoC);
         btnSalvarConfig = findViewById(R.id.btnSalvarConfig);
+
+        // ================================================================
+        // ATIVIDADE 5 — CAMPOS NOVOS DE RODAPÉ E DATA LIMITE
+        // ================================================================
+        edtMensagemRodape = findViewById(R.id.edtMensagemRodape);
+        edtDataEncerramento = findViewById(R.id.edtDataEncerramento);
     }
 
     // =====================================================================
-    //  Carregamento das configurações atuais
+    // Carregar configuração COMPLETA (texto + rodapé + horário)
     // =====================================================================
 
-    /**
-     * Busca no Firestore os textos atuais da enquete (título e opções) e
-     * preenche os campos da tela.
-     */
     private void carregarConfiguracoesAtuais() {
-        enqueteRepository.carregarConfiguracoes(new EnqueteRepository.ConfiguracaoCarregadaCallback() {
-            @Override
-            public void onConfiguracaoCarregada(String titulo,
-                                                String opcaoA,
-                                                String opcaoB,
-                                                String opcaoC) {
 
-                if (titulo != null) {
-                    edtTituloEnquete.setText(titulo);
-                }
-                if (opcaoA != null) {
-                    edtOpcaoA.setText(opcaoA);
-                }
-                if (opcaoB != null) {
-                    edtOpcaoB.setText(opcaoB);
-                }
-                if (opcaoC != null) {
-                    edtOpcaoC.setText(opcaoC);
-                }
+        // AGORA CHAMAMOS O NOVO MÉTODO
+        enqueteRepository.carregarConfiguracoesCompleta(new EnqueteRepository.ConfiguracaoCompletaCallback() {
+            @Override
+            public void onConfig(String titulo,
+                                 String opcA,
+                                 String opcB,
+                                 String opcC,
+                                 String rodape,
+                                 String fim) {
+
+                if (titulo != null) edtTituloEnquete.setText(titulo);
+                if (opcA != null) edtOpcaoA.setText(opcA);
+                if (opcB != null) edtOpcaoB.setText(opcB);
+                if (opcC != null) edtOpcaoC.setText(opcC);
+
+                // ============================================================
+                // ATIVIDADE 5 — Preencher campos novos
+                // ============================================================
+                if (rodape != null) edtMensagemRodape.setText(rodape);
+                if (fim != null) edtDataEncerramento.setText(fim);
             }
 
             @Override
             public void onErro(Exception e) {
-                Log.e(TAG, "Erro ao carregar configurações atuais: ", e);
-                Toast.makeText(
-                        ConfigurarEnqueteActivity.this,
-                        "Erro ao carregar configurações.",
-                        Toast.LENGTH_SHORT
-                ).show();
+                Log.e(TAG, "Erro ao carregar configurações: ", e);
+                Toast.makeText(ConfigurarEnqueteActivity.this,
+                        "Erro ao carregar configurações.", Toast.LENGTH_SHORT).show();
             }
         });
     }
 
     // =====================================================================
-    //  Lógica do botão "Salvar"
+    // Botão para salvar — AGORA COM VALIDAÇÃO COMPLETA
     // =====================================================================
 
-    /**
-     * Define o comportamento do botão de salvar:
-     * - Lê os valores digitados
-     * - Faz validações básicas
-     * - Envia para o EnqueteRepository salvar no Firestore
-     */
     private void configurarBotaoSalvar() {
         btnSalvarConfig.setOnClickListener(v -> {
+
+            // ------------------------
+            // Leitura dos campos antigos
+            // ------------------------
             String titulo = edtTituloEnquete.getText().toString().trim();
             String opcaoA = edtOpcaoA.getText().toString().trim();
             String opcaoB = edtOpcaoB.getText().toString().trim();
             String opcaoC = edtOpcaoC.getText().toString().trim();
 
-            // Validações simples para evitar salvar dados incompletos
+            // ------------------------
+            // ATIVIDADE 5 — Novos campos
+            // ------------------------
+            String rodape = edtMensagemRodape.getText().toString().trim();
+            String dataFim = edtDataEncerramento.getText().toString().trim();
+
+            // ------------------------
+            // Validações
+            // ------------------------
             if (titulo.isEmpty()) {
-                Toast.makeText(
-                        this,
-                        "Informe a pergunta da enquete.",
-                        Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(this, "Informe a pergunta da enquete.", Toast.LENGTH_SHORT).show();
                 return;
             }
 
             if (opcaoA.isEmpty() || opcaoB.isEmpty() || opcaoC.isEmpty()) {
-                Toast.makeText(
-                        this,
-                        "Preencha as três opções (A, B e C).",
-                        Toast.LENGTH_SHORT
-                ).show();
+                Toast.makeText(this, "Preencha as três opções.", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            // Chama o repositório para salvar no Firestore
+            // ============================================================
+            // ATIVIDADE 5 — Validar data limite da enquete
+            // ============================================================
+            if (!dataFim.isEmpty()) {
+                SimpleDateFormat sdf =
+                        new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
+                sdf.setLenient(false);
+
+                try {
+                    Date data = sdf.parse(dataFim);
+                    if (data.before(new Date())) {
+                        Toast.makeText(this,
+                                "A data de encerramento não pode ser no passado.",
+                                Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                } catch (Exception e) {
+                    Toast.makeText(this,
+                            "Formato inválido. Use: dd/MM/yyyy HH:mm",
+                            Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+
+            // ============================================================
+            // SALVANDO TUDO — NOVO MÉTODO COM 6 CAMPOS
+            // ============================================================
             enqueteRepository.salvarConfiguracoes(
                     titulo,
                     opcaoA,
                     opcaoB,
                     opcaoC,
+                    rodape,        // NOVO
+                    dataFim,       // NOVO
                     new EnqueteRepository.OperacaoCallback() {
                         @Override
                         public void onSucesso() {
-                            Toast.makeText(
-                                    ConfigurarEnqueteActivity.this,
-                                    "Configurações salvas com sucesso.",
-                                    Toast.LENGTH_SHORT
-                            ).show();
-                            // Volta para a tela de votação
+                            Toast.makeText(ConfigurarEnqueteActivity.this,
+                                    "Configurações salvas.",
+                                    Toast.LENGTH_SHORT).show();
                             finish();
                         }
 
                         @Override
                         public void onErro(Exception e) {
-                            Log.e(TAG, "Erro ao salvar configurações: ", e);
-                            Toast.makeText(
-                                    ConfigurarEnqueteActivity.this,
-                                    "Erro ao salvar configurações.",
-                                    Toast.LENGTH_SHORT
-                            ).show();
+                            Toast.makeText(ConfigurarEnqueteActivity.this,
+                                    "Erro ao salvar.",
+                                    Toast.LENGTH_SHORT).show();
                         }
                     }
             );

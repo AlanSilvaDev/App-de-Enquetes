@@ -177,6 +177,46 @@
             android:textColor="#616161"
             android:textSize="14sp" />
 
+        <!-- Informações adicionais do voto ( data, id, dispositivos -->
+        <TextView
+            android:id="@+id/txtDataVoto"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Data do voto: —"
+            android:textSize="12sp"
+            android:textColor="#757575"/>
+
+        <TextView
+            android:id="@+id/txtUidUsuario"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Seu UID: —"
+            android:textSize="12sp"
+            android:textColor="#757575"/>
+
+        <TextView
+            android:id="@+id/txtDeviceInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dispositivo: —"
+            android:textSize="12sp"
+            android:textColor="#757575"
+            android:layout_marginBottom="12dp"/>
+
+        <TextView
+            android:id="@+id/txtRodape"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textStyle="italic"
+            android:textSize="12sp"
+            android:textColor="#D32F2F"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            tools:text="Votação encerra às 20h"
+            tools:visibility="visible"/>
+        <!-- ========================================================== -->
+
         <!-- Botão para o professor zerar votos -->
         <Button
             android:id="@+id/btnReset"
@@ -191,6 +231,7 @@
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />
+
 
     </LinearLayout>
 

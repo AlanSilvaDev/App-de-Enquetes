@@ -27,6 +27,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ListaVotantesActivity"
+            android:exported="false"
+            android:label="Lista de Votantes" />
+
     </application>
 
 </manifest>

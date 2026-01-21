@@ -3,6 +3,9 @@
 Aplicativo **Android nativo**, desenvolvido em **Java**, para criação e gestão de **enquetes em tempo real**, utilizando o **Firebase** como backend.  
 O sistema suporta **votação anónima**, **atualização instantânea dos resultados** e uma **área administrativa** para configuração, auditoria e controlo da enquete.
 
+
+![telas](telas.png)
+
 ---
 
 ## 🚀 Funcionalidades
